@@ -3,14 +3,15 @@ use cached::proc_macro::cached;
 use maplit::hashmap;
 use polars::{datatypes::DataType, prelude::*};
 use serde_json::Value;
-use std::{collections::HashMap, vec};
+use std::vec;
+use ahash::AHashMap;
 
 use crate::utils::*;
 
 // 60 * 60 * 24
 #[cached(time = 86400)]
-async fn code_id_map_em() -> HashMap<String, char> {
-    let mut result = HashMap::new();
+async fn code_id_map_em() -> AHashMap<String, char> {
+    let mut result = AHashMap::new();
     for (fs, id) in vec![
         ("m:1 t:2,m:1 t:23", '1'),
         ("m:0 t:6,m:0 t:80", '0'),
@@ -161,7 +162,13 @@ mod tests {
     #[tokio::test]
     async fn test_stock_zh_a_hist() {
         let now = Instant::now();
-        let df = stock_zh_a_hist("000001", "daily", "20210601", "20210615", "qfq")
+        stock_zh_a_hist("000001", "daily", "20210601", "20210615", "qfq")
+            .await
+            .unwrap()
+            .unwrap();
+        println!("time: {:?}", now.elapsed());
+        let now = Instant::now();
+        stock_zh_a_hist("000001", "daily", "20210601", "20210615", "qfq")
             .await
             .unwrap()
             .unwrap();
