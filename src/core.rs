@@ -1,13 +1,9 @@
 use anyhow::{bail, Ok, Result};
 use cached::proc_macro::cached;
-use futures::stream::StreamExt;
 use maplit::hashmap;
 use polars::{datatypes::DataType, prelude::*};
 use serde_json::Value;
-use std::{
-    collections::{linked_list, HashMap, LinkedList},
-    vec,
-};
+use std::{collections::HashMap, vec};
 
 use crate::utils::*;
 
@@ -26,7 +22,7 @@ async fn code_id_map_em() -> HashMap<String, char> {
     result
 }
 
-async fn code_in_map(fs: &str, id: char) -> linked_list::IntoIter<(String, char)> {
+async fn code_in_map(fs: &str, id: char) -> Vec<(String, char)> {
     let url = "http://80.push2.eastmoney.com/api/qt/clist/get";
     let params = hashmap! {
         "pn" => "1",
@@ -50,8 +46,7 @@ async fn code_in_map(fs: &str, id: char) -> linked_list::IntoIter<(String, char)
         .unwrap()
         .into_iter()
         .map(|x| (x["f12"].as_str().unwrap().to_owned(), id))
-        .collect::<LinkedList<(String, char)>>()
-        .into_iter()
+        .collect::<Vec<(String, char)>>()
 }
 
 pub async fn stock_zh_a_hist(
@@ -62,7 +57,7 @@ pub async fn stock_zh_a_hist(
     adjust: &str,
 ) -> Result<Option<DataFrame>> {
     let code_id_map = code_id_map_em().await;
-    
+
     let period = match period {
         "daily" => "101",
         "weekly" => "102",
@@ -154,18 +149,22 @@ pub async fn stock_zh_a_hist(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Instant;
 
     #[tokio::test]
     async fn test_code_id_map_em() {
+        let now = Instant::now();
         code_id_map_em().await;
+        println!("time: {:?}", now.elapsed());
     }
 
     #[tokio::test]
     async fn test_stock_zh_a_hist() {
+        let now = Instant::now();
         let df = stock_zh_a_hist("000001", "daily", "20210601", "20210615", "qfq")
             .await
             .unwrap()
             .unwrap();
-        println!("{}", df);
+        println!("time: {:?}", now.elapsed());
     }
 }
