@@ -1,15 +1,58 @@
 use anyhow::{bail, Ok, Result};
+use cached::proc_macro::cached;
+use futures::stream::StreamExt;
+use maplit::hashmap;
 use polars::{datatypes::DataType, prelude::*};
 use serde_json::Value;
-use std::{collections::HashMap, vec};
+use std::{
+    collections::{linked_list, HashMap, LinkedList},
+    vec,
+};
 
 use crate::utils::*;
 
-// #[derive(thiserror::Error, Debug)]
-// enum Error {
-//     #[error("No data is found on the args")]
-//     NoData,
-// }
+// 60 * 60 * 24
+#[cached(time = 86400)]
+async fn code_id_map_em() -> HashMap<String, char> {
+    let mut result = HashMap::new();
+    for (fs, id) in vec![
+        ("m:1 t:2,m:1 t:23", '1'),
+        ("m:0 t:6,m:0 t:80", '0'),
+        ("m:0 t:81 s:2048", '0'),
+    ] {
+        result.extend(code_in_map(fs, id).await)
+    }
+
+    result
+}
+
+async fn code_in_map(fs: &str, id: char) -> linked_list::IntoIter<(String, char)> {
+    let url = "http://80.push2.eastmoney.com/api/qt/clist/get";
+    let params = hashmap! {
+        "pn" => "1",
+        "pz" => "50000",
+        "po" => "1",
+        "np" => "1",
+        "ut" => "bd1d9ddb04089700cf9c27f6f7426281",
+        "fltt" => "2",
+        "invt" => "2",
+        "fid" => "f3",
+        "fs" => fs,
+        "fields" => "f12",
+        "_" => "1623833739532",
+    };
+    let data_json: Value = request(url, params).await.unwrap().parse().unwrap();
+    // if data_json["data"]["diff"] == Value::Null {
+    //     return ;
+    // };
+    data_json["data"]["diff"]
+        .as_array()
+        .unwrap()
+        .into_iter()
+        .map(|x| (x["f12"].as_str().unwrap().to_owned(), id))
+        .collect::<LinkedList<(String, char)>>()
+        .into_iter()
+}
 
 pub async fn stock_zh_a_hist(
     symbol: &str,
@@ -18,6 +61,8 @@ pub async fn stock_zh_a_hist(
     end_date: &str,
     adjust: &str,
 ) -> Result<Option<DataFrame>> {
+    let code_id_map = code_id_map_em().await;
+    
     let period = match period {
         "daily" => "101",
         "weekly" => "102",
@@ -33,25 +78,32 @@ pub async fn stock_zh_a_hist(
     };
 
     let url = "http://push2his.eastmoney.com/api/qt/stock/kline/get";
-    let params: HashMap<&str, &str> = vec![
-        ("fields1", "f1,f2,f3,f4,f5,f6"),
-        (
-            "fields2",
-            "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f116",
-        ),
-        ("ut", "7eea3edcaed734bea9cbfc24409ed989"),
-        ("klt", period),
-        ("fqt", adjust),
-        ("secid", format!("{symbol}").as_str()),
-        ("beg", start_date),
-        ("end", end_date),
-        ("_", "1623766962675"),
-    ]
-    .into_iter()
-    .collect();
+    // params = {
+    //     "fields1": "f1,f2,f3,f4,f5,f6",
+    //     "fields2": "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f116",
+    //     "ut": "7eea3edcaed734bea9cbfc24409ed989",
+    //     "klt": period_dict[period],
+    //     "fqt": adjust_dict[adjust],
+    //     "secid": f"{code_id_dict[symbol]}.{symbol}",
+    //     "beg": start_date,
+    //     "end": end_date,
+    //     "_": "1623766962675",
+    // }
+    let secid = format!("{}.{}", code_id_map[symbol], symbol);
+    let params = hashmap! {
+        "fields1" => "f1,f2,f3,f4,f5,f6",
+        "fields2" => "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f116",
+        "ut" => "7eea3edcaed734bea9cbfc24409ed989",
+        "klt" => period,
+        "fqt" => adjust,
+        "secid" => secid.as_str(),
+        "beg" => start_date,
+        "end" => end_date,
+        "_" => "1623766962675",
+    };
 
-    let r: Value = request(url, params).await?.parse()?;
-    if r["data"]["klines"] == Value::Null {
+    let data_json: Value = request(url, params).await?.parse()?;
+    if data_json["data"]["klines"] == Value::Null {
         return Ok(None);
     };
 
@@ -69,7 +121,7 @@ pub async fn stock_zh_a_hist(
         "换手率",
     ];
 
-    let klines = r["data"]["klines"]
+    let klines = data_json["data"]["klines"]
         .as_array()
         .unwrap()
         .into_iter()
@@ -97,4 +149,23 @@ pub async fn stock_zh_a_hist(
     }
 
     Ok(Some(new_df))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_code_id_map_em() {
+        code_id_map_em().await;
+    }
+
+    #[tokio::test]
+    async fn test_stock_zh_a_hist() {
+        let df = stock_zh_a_hist("000001", "daily", "20210601", "20210615", "qfq")
+            .await
+            .unwrap()
+            .unwrap();
+        println!("{}", df);
+    }
 }

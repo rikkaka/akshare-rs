@@ -1,2 +1,4 @@
 mod utils;
-pub mod core;
+mod core;
+
+pub use crate::core::*;

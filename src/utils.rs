@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 use anyhow::Result;
+use polars::prelude::DataFrame;
+use serde_json::Value;
 
 pub async fn request(url: &str, params: HashMap<&str, &str>) -> Result<String> {
     let client = reqwest::Client::new();
@@ -24,4 +26,10 @@ impl<T: Clone> Transpose for Vec<Vec<T>> {
         }
         new_matrix
     }
+}
+
+pub fn value_line_to_df(value: Value) -> Result<DataFrame> {
+    let lines = value.as_array().unwrap().into_iter().map(|x| x.as_array().unwrap().to_vec()).collect::<Vec<_>>();
+
+    todo!()
 }
