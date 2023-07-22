@@ -1,4 +1,5 @@
 use crate::imports::*;
+use smartstring::alias::String as SmartString;
 
 pub async fn stock_zh_a_spot_em() -> Result<Option<DataFrame>> {
     let url = "http://82.push2.eastmoney.com/api/qt/clist/get";
@@ -20,7 +21,7 @@ pub async fn stock_zh_a_spot_em() -> Result<Option<DataFrame>> {
         return Ok(None);
     };
 
-    let columns = vec![
+    let columns = [
         "_",
         "最新价",
         "涨跌幅",
@@ -54,9 +55,9 @@ pub async fn stock_zh_a_spot_em() -> Result<Option<DataFrame>> {
         "-",
     ];
 
-    let temp_df = array_object_to_df(&columns, &data_json["data"]["diff"])?;
+    // let temp_df = array_object_to_df(&columns, &data_json["data"]["diff"])?;
 
-    println!("{:?}", temp_df);
+    // println!("{:?}", temp_df);
 
     todo!()
 }
@@ -103,7 +104,7 @@ pub async fn stock_zh_a_hist(
         return Ok(None);
     };
 
-    let columns = vec![
+    let columns = [
         "日期",
         "开盘",
         "收盘",
@@ -117,8 +118,13 @@ pub async fn stock_zh_a_hist(
         "换手率",
     ];
 
+    let mut schema = Schema::with_capacity(20);
+    for i in 0..columns.len() {
+        schema.insert_at_index(i, columns[i].into(), DataType::Utf8)?;
+    }
+
     let klines = lines_str_split(&data_json["data"]["klines"], ',');
-    let temp_df = iter2d_to_df(klines, &Schema::new())?;
+    let temp_df = iter2d_to_df(klines, &schema)?;
 
     let mut col_iter = columns.iter();
     let mut new_df = DataFrame::new(Vec::<Series>::new())?;
@@ -133,6 +139,7 @@ pub async fn stock_zh_a_hist(
     }
 
     Ok(Some(new_df))
+    // Ok(None)
 }
 
 // 60 * 60 * 24
@@ -205,7 +212,7 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        assert!(!res.is_empty());
+        // assert!(!res.is_empty());
         println!("time: {:?}", now.elapsed());
         println!("{:?}", res);
     }

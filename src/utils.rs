@@ -45,38 +45,32 @@ impl<T: Clone> Transpose for Vec<Vec<T>> {
     }
 }
 
-type Iter<T> = Box<dyn Iterator<Item = T>>;
-type IIter<T> = Box<dyn Iterator<Item = Iter<T>>>;
+type Iter<'a, T> = Box<dyn Iterator<Item = T> + 'a>;
+type IIter<'a, T> = Box<dyn Iterator<Item = Iter<'a, T>>>;
 
-pub fn lines_str_split(value: &Value, sep: char) -> IIter<AnyValue> {
-    Box::new(
-        value
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|x| Box::new(x.as_str().unwrap().split(sep).map(|x| AnyValue::Utf8(x))) as Iter<AnyValue>),
-    )
+pub fn lines_str_split<'a>(value: &'a Value, sep: char) -> IIterAnyValue<'a> {
+    Box::new(value.as_array().unwrap().iter().map(move |x| {
+        Box::new(
+            x.as_str()
+                .unwrap()
+                .split(sep)
+                .map(move |x| AnyValue::Utf8(x))
+                .into_iter(),
+        ) as Iter<AnyValue>
+    }))
 }
 
-pub fn lines_array(value: &Value) -> IIter<AnyValue> {
-    Box::new(
-        value.as_array().unwrap().iter().map(|x| {
-            Box::new(x.as_array().unwrap().iter().map(|x| value_to_anyvalue(x))) as Iter<AnyValue>
-        }),
-    )
+pub fn lines_array<'a>(value: &'a Value) -> IIterAnyValue<'a> {
+    Box::new(value.as_array().unwrap().iter().map(|x| {
+        Box::new(x.as_array().unwrap().iter().map(|x| value_to_anyvalue(x))) as Iter<AnyValue>
+    }))
 }
 
-type IterAnyValue<'a> = Box<dyn Iterator<Item = AnyValue<'a>>>;
-type IIterAnyValue<'a> = Box<dyn Iterator<Item = IterAnyValue<'a>>>;
-pub fn iter2d_to_df(iter: IIterAnyValue, schema: &Schema) -> Result<DataFrame> {
-    Ok(DataFrame::from_rows_iter_and_schema(
-        iter.map(|x| &Row::new(x.collect())),
-        schema,
-    )?)
-}
-
-struct TypedValue<T> {
-    value: T,
+type IterAnyValue<'a> = Box<dyn Iterator<Item = AnyValue<'a>> + 'a>;
+type IIterAnyValue<'a> = Box<dyn Iterator<Item = IterAnyValue<'a>> + 'a>;
+pub fn iter2d_to_df<'a>(iter: IIterAnyValue<'a>, schema: &Schema) -> Result<DataFrame> {
+    let rows = iter.map(|x| Row::new(x.collect())).collect::<Vec<Row>>();
+    Ok(DataFrame::from_rows_and_schema(&rows, schema)?)
 }
 
 pub fn array_object_to_df(value: &Value, schema: &Schema) -> Result<DataFrame> {
@@ -91,6 +85,25 @@ pub fn array_object_to_df(value: &Value, schema: &Schema) -> Result<DataFrame> {
         })),
         schema,
     )
+}
+
+pub fn array_object_to_seriess(names: &[&str], value: &Value) -> Vec<Series> {
+    value
+        .as_array()
+        .unwrap()
+        .iter()
+        .zip(names)
+        .map(|(x, name)| {
+            Series::new(
+                name,
+                x.as_object()
+                    .unwrap()
+                    .iter()
+                    .map(|(_, x)| value_to_anyvalue(x))
+                    .collect::<Vec<AnyValue>>(),
+            )
+        })
+        .collect::<Vec<Series>>()
 }
 
 fn value_to_anyvalue(value: &Value) -> AnyValue {

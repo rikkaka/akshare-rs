@@ -22,9 +22,7 @@ pub async fn stock_sse_summary() -> Result<DataFrame> {
     );
     let data_json: Value = request_header(url, params, headers).await?;
 
-    let vecs = array_object_to_vec2d(&data_json["result"]);
-
-    let index_vec = vec![
+    let index_vec = [
         "流通股本",
         "总市值",
         "平均市盈率",
@@ -39,7 +37,7 @@ pub async fn stock_sse_summary() -> Result<DataFrame> {
     let mut seriess = vec![Series::new("项目", index_vec)];
 
     let columns = vec!["股票", "主板", "科创板"];
-    seriess.extend(vecs_to_seriess(&columns, vecs));
+    seriess.extend(array_object_to_seriess(&columns, &data_json["result"]));
 
     let temp_df = DataFrame::new(seriess)?;
     let temp_df = temp_df
