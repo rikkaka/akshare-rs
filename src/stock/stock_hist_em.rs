@@ -212,7 +212,7 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        // assert!(!res.is_empty());
+        assert!(!res.is_empty());
         println!("time: {:?}", now.elapsed());
         println!("{:?}", res);
     }
