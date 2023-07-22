@@ -22,19 +22,7 @@ pub async fn stock_sse_summary() -> Result<DataFrame> {
     );
     let data_json: Value = request_header(url, params, headers).await?;
 
-    let vecs = data_json["result"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|value| {
-            value
-                .as_object()
-                .unwrap()
-                .iter()
-                .map(|(_, x)| x.as_str().unwrap())
-                .collect::<Vec<&str>>()
-        })
-        .collect::<Vec<Vec<&str>>>();
+    let vecs = array_object_to_vec2d(&data_json["result"]);
 
     let index_vec = vec![
         "流通股本",
@@ -54,7 +42,11 @@ pub async fn stock_sse_summary() -> Result<DataFrame> {
     seriess.extend(vecs_to_seriess(&columns, vecs));
 
     let temp_df = DataFrame::new(seriess)?;
-    let temp_df = temp_df.lazy().filter(col("项目").neq(lit("-"))).collect()?;
+    let temp_df = temp_df
+        .lazy()
+        .filter(col("项目").neq(lit("-")))
+        .filter(col("项目").neq(lit("项目")))
+        .collect()?;
 
     Ok(temp_df)
 }
@@ -67,6 +59,7 @@ mod tests {
     async fn test_stock_sse_summary() {
         let now = Instant::now();
         let res = stock_sse_summary().await.unwrap();
+        assert!(!res.is_empty());
         println!("stock_sse_summary: {:?}", now.elapsed());
         println!("{:?}", res);
     }

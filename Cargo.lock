@@ -49,6 +49,7 @@ dependencies = [
  "polars",
  "reqwest",
  "serde_json",
+ "smartstring",
  "tokio",
 ]
 
