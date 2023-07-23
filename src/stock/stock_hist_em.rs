@@ -22,7 +22,6 @@ pub async fn stock_zh_a_spot_em() -> Result<Option<DataFrame>> {
     };
 
     let columns = [
-        "_",
         "最新价",
         "涨跌幅",
         "涨跌额",
@@ -34,7 +33,6 @@ pub async fn stock_zh_a_spot_em() -> Result<Option<DataFrame>> {
         "量比",
         "5分钟涨跌",
         "代码",
-        "_",
         "名称",
         "最高",
         "最低",
@@ -46,20 +44,46 @@ pub async fn stock_zh_a_spot_em() -> Result<Option<DataFrame>> {
         "市净率",
         "60日涨跌幅",
         "年初至今涨跌幅",
-        "-",
-        "-",
-        "-",
-        "-",
-        "-",
-        "-",
-        "-",
     ];
+    let mut schema = Schema::new();
+    for i in 0..columns.len() {
+        schema
+            .insert_at_index(i, columns[i].into(), DataType::Float64)
+            .unwrap();
+    }
+    let str_columns = ["代码", "名称"];
+    for col in str_columns {
+        schema
+            .set_dtype(col, DataType::Utf8);
+    }
 
-    // let temp_df = array_object_to_df(&columns, &data_json["data"]["diff"])?;
+    let mut temp_df = array_object_to_df(&data_json["data"]["diff"], &schema).unwrap();
+    temp_df = temp_df.select([
+        "代码",
+        "名称",
+        "最新价",
+        "涨跌幅",
+        "涨跌额",
+        "成交量",
+        "成交额",
+        "振幅",
+        "最高",
+        "最低",
+        "今开",
+        "昨收",
+        "量比",
+        "换手率",
+        "市盈率-动态",
+        "市净率",
+        "总市值",
+        "流通市值",
+        "涨速",
+        "5分钟涨跌",
+        "60日涨跌幅",
+        "年初至今涨跌幅",
+    ])?;
 
-    // println!("{:?}", temp_df);
-
-    todo!()
+    Ok(Some(temp_df))
 }
 
 pub async fn stock_zh_a_hist(
@@ -124,7 +148,7 @@ pub async fn stock_zh_a_hist(
     }
 
     let klines = lines_str_split(&data_json["data"]["klines"], ',');
-    let temp_df = iter2d_to_df(klines, &schema)?;
+    let temp_df = iiter_to_df(klines, &schema)?;
 
     let mut col_iter = columns.iter();
     let mut new_df = DataFrame::new(Vec::<Series>::new())?;
@@ -189,14 +213,6 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_code_id_map_em() {
-        let now = Instant::now();
-        let res = code_id_map_em().await;
-        assert!(!res.is_empty());
-        println!("code_id_map_em: {:?}", now.elapsed());
-    }
-
-    #[tokio::test]
     async fn test_stock_zh_a_spot_em() {
         let now = Instant::now();
         let res = stock_zh_a_spot_em().await.unwrap().unwrap();
@@ -215,5 +231,13 @@ mod tests {
         assert!(!res.is_empty());
         println!("time: {:?}", now.elapsed());
         println!("{:?}", res);
+    }
+
+    #[tokio::test]
+    async fn test_code_id_map_em() {
+        let now = Instant::now();
+        let res = code_id_map_em().await;
+        assert!(!res.is_empty());
+        println!("code_id_map_em: {:?}", now.elapsed());
     }
 }

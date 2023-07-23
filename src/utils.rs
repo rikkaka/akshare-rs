@@ -60,7 +60,7 @@ pub fn lines_str_split<'a>(value: &'a Value, sep: char) -> IIterAnyValue<'a> {
     }))
 }
 
-pub fn lines_array<'a>(value: &'a Value) -> IIterAnyValue<'a> {
+pub fn array_array_to_iiter<'a>(value: &'a Value) -> IIterAnyValue<'a> {
     Box::new(value.as_array().unwrap().iter().map(|x| {
         Box::new(x.as_array().unwrap().iter().map(|x| value_to_anyvalue(x))) as Iter<AnyValue>
     }))
@@ -68,13 +68,18 @@ pub fn lines_array<'a>(value: &'a Value) -> IIterAnyValue<'a> {
 
 type IterAnyValue<'a> = Box<dyn Iterator<Item = AnyValue<'a>> + 'a>;
 type IIterAnyValue<'a> = Box<dyn Iterator<Item = IterAnyValue<'a>> + 'a>;
-pub fn iter2d_to_df<'a>(iter: IIterAnyValue<'a>, schema: &Schema) -> Result<DataFrame> {
+pub fn iiter_to_df<'a>(iter: IIterAnyValue<'a>, schema: &Schema) -> Result<DataFrame> {
     let rows = iter.map(|x| Row::new(x.collect())).collect::<Vec<Row>>();
     Ok(DataFrame::from_rows_and_schema(&rows, schema)?)
 }
 
+pub fn iiter_to_df_noshema<'a>(iter: IIterAnyValue<'a>) -> Result<DataFrame> {
+    let rows = iter.map(|x| Row::new(x.collect())).collect::<Vec<Row>>();
+    Ok(DataFrame::from_rows(&rows)?)
+}
+
 pub fn array_object_to_df(value: &Value, schema: &Schema) -> Result<DataFrame> {
-    iter2d_to_df(
+    iiter_to_df(
         Box::new(value.as_array().unwrap().iter().map(|x| {
             Box::new(
                 x.as_object()
@@ -117,7 +122,12 @@ fn value_to_anyvalue(value: &Value) -> AnyValue {
                 AnyValue::Float64(x.as_f64().unwrap())
             }
         }
-        Value::String(x) => AnyValue::Utf8(x),
+        Value::String(x) => {
+            match x.as_str() {
+                "-" | "" => AnyValue::Null,
+                _ => AnyValue::Utf8(x),
+            }
+        },
         _ => panic!("not support type"),
     }
 }
