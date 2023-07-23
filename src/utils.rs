@@ -1,8 +1,6 @@
-use anyhow::{bail, Result};
-use polars::{frame::row::Row, prelude::*};
-use reqwest::header::HeaderMap;
-use serde_json::Value;
-use std::collections::HashMap;
+use polars::frame::row::Row;
+
+use crate::imports::*;
 
 pub async fn request(url: &str, params: HashMap<&str, &str>) -> Result<Value> {
     let client = reqwest::Client::new();
@@ -27,69 +25,49 @@ pub async fn request_header(
     Ok(text.parse()?)
 }
 
-pub trait Transpose {
-    fn transpose(self) -> Self;
+// type Iter<'a, T> = Box<dyn Iterator<Item = T> + 'a>;
+// type IIter<'a, T> = Box<dyn Iterator<Item = Iter<'a, T>>>;
+
+pub fn array_split_to_df<'a>(value: &'a Value, sep: char, schema: &Schema) -> DataFrame {
+    // Box::new(value.as_array().unwrap().iter().map(move |x| {
+    //     Box::new(
+    //         x.as_str()
+    //             .unwrap()
+    //             .split(sep)
+    //             .map(move |x| AnyValue::Utf8(x))
+    //     ) as IterAnyValue
+    // }))
+    let rows = value
+        .as_array()
+        .unwrap()
+        .par_iter()
+        .map(|x| Row::new(x.as_str().expect("Mismatched value type").split(sep).map(|x| AnyValue::Utf8(x)).collect::<Vec<AnyValue>>()))
+        .collect::<Vec<Row>>();
+    DataFrame::from_rows_and_schema(&rows, schema).unwrap()
 }
 
-impl<T: Clone> Transpose for Vec<Vec<T>> {
-    fn transpose(self) -> Self {
-        let mut new_matrix = Vec::new();
-        for i in 0..self[0].len() {
-            let mut column = Vec::new();
-            for row in self.iter() {
-                column.push(row[i].clone());
-            }
-            new_matrix.push(column);
-        }
-        new_matrix
-    }
-}
+// pub fn array_array_to_iiter<'a>(value: &'a Value) -> IIterAnyValue<'a> {
+//     Box::new(value.as_array().unwrap().iter().map(|x| {
+//         Box::new(x.as_array().unwrap().iter().map(|x| value_to_anyvalue(x))) as Iter<AnyValue>
+//     }))
+// }
 
-type Iter<'a, T> = Box<dyn Iterator<Item = T> + 'a>;
-type IIter<'a, T> = Box<dyn Iterator<Item = Iter<'a, T>>>;
+// type IterAnyValue<'a> = Box<dyn Iterator<Item = AnyValue<'a>> + 'a>;
+// type IIterAnyValue<'a> = Box<dyn Iterator<Item = IterAnyValue<'a>> + 'a>;
+// pub fn iiter_to_df<'a>(iter: IIterAnyValue<'a>, schema: &Schema) -> Result<DataFrame> {
+//     let rows = iter.map(|x| Row::new(x.collect())).collect::<Vec<Row>>();
+//     Ok(DataFrame::from_rows_and_schema(&rows, schema)?)
+// }
 
-pub fn lines_str_split<'a>(value: &'a Value, sep: char) -> IIterAnyValue<'a> {
-    Box::new(value.as_array().unwrap().iter().map(move |x| {
-        Box::new(
-            x.as_str()
-                .unwrap()
-                .split(sep)
-                .map(move |x| AnyValue::Utf8(x))
-                .into_iter(),
-        ) as Iter<AnyValue>
-    }))
-}
-
-pub fn array_array_to_iiter<'a>(value: &'a Value) -> IIterAnyValue<'a> {
-    Box::new(value.as_array().unwrap().iter().map(|x| {
-        Box::new(x.as_array().unwrap().iter().map(|x| value_to_anyvalue(x))) as Iter<AnyValue>
-    }))
-}
-
-type IterAnyValue<'a> = Box<dyn Iterator<Item = AnyValue<'a>> + 'a>;
-type IIterAnyValue<'a> = Box<dyn Iterator<Item = IterAnyValue<'a>> + 'a>;
-pub fn iiter_to_df<'a>(iter: IIterAnyValue<'a>, schema: &Schema) -> Result<DataFrame> {
-    let rows = iter.map(|x| Row::new(x.collect())).collect::<Vec<Row>>();
-    Ok(DataFrame::from_rows_and_schema(&rows, schema)?)
-}
-
-pub fn iiter_to_df_noshema<'a>(iter: IIterAnyValue<'a>) -> Result<DataFrame> {
-    let rows = iter.map(|x| Row::new(x.collect())).collect::<Vec<Row>>();
-    Ok(DataFrame::from_rows(&rows)?)
-}
-
-pub fn array_object_to_df(value: &Value, schema: &Schema) -> Result<DataFrame> {
-    iiter_to_df(
-        Box::new(value.as_array().unwrap().iter().map(|x| {
-            Box::new(
-                x.as_object()
-                    .unwrap()
-                    .iter()
-                    .map(|(_, x)| value_to_anyvalue(x)),
-            ) as IterAnyValue
-        })),
-        schema,
-    )
+pub fn array_object_to_df(value: &Value, schema: &Schema) ->DataFrame {
+    let rows = value
+        .as_array()
+        .expect("Mismatched value type")
+        .par_iter()
+        .map(|x| Row::new(x.as_object().unwrap()
+        .iter().map(|(_, x)| value_to_anyvalue(x)).collect::<Vec<AnyValue>>()))
+        .collect::<Vec<Row>>();
+    DataFrame::from_rows_and_schema(&rows, schema).unwrap()
 }
 
 pub fn array_object_to_seriess(names: &[&str], value: &Value) -> Vec<Series> {

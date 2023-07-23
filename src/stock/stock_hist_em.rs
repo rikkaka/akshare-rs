@@ -1,5 +1,4 @@
 use crate::imports::*;
-use smartstring::alias::String as SmartString;
 
 pub async fn stock_zh_a_spot_em() -> Result<Option<DataFrame>> {
     let url = "http://82.push2.eastmoney.com/api/qt/clist/get";
@@ -57,7 +56,10 @@ pub async fn stock_zh_a_spot_em() -> Result<Option<DataFrame>> {
             .set_dtype(col, DataType::Utf8);
     }
 
-    let mut temp_df = array_object_to_df(&data_json["data"]["diff"], &schema).unwrap();
+    let now = Instant::now();
+    let mut temp_df = array_object_to_df(&data_json["data"]["diff"], &schema);
+    println!("array_object_to_df: {:?}", now.elapsed());
+
     temp_df = temp_df.select([
         "代码",
         "名称",
@@ -147,8 +149,7 @@ pub async fn stock_zh_a_hist(
         schema.insert_at_index(i, columns[i].into(), DataType::Utf8)?;
     }
 
-    let klines = lines_str_split(&data_json["data"]["klines"], ',');
-    let temp_df = iiter_to_df(klines, &schema)?;
+    let temp_df = array_split_to_df(&data_json["data"]["klines"], ',', &schema);
 
     let mut col_iter = columns.iter();
     let mut new_df = DataFrame::new(Vec::<Series>::new())?;

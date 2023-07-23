@@ -47,6 +47,7 @@ dependencies = [
  "cached",
  "maplit",
  "polars",
+ "rayon",
  "reqwest",
  "serde_json",
  "smartstring",

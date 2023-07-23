@@ -1,5 +1,3 @@
-use reqwest::header::HeaderMap;
-
 use crate::imports::*;
 
 pub async fn stock_sse_summary() -> Result<DataFrame> {
