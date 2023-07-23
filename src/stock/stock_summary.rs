@@ -32,13 +32,15 @@ pub async fn stock_sse_summary() -> Result<DataFrame> {
         "总股本",
         "项目",
     ];
-    let mut seriess = vec![Series::new("项目", index_vec)];
+    let mut temp_df = DataFrame::new(vec![Series::new("项目", &index_vec)]).unwrap();
 
     let columns = vec!["股票", "主板", "科创板"];
-    seriess.extend(array_object_to_seriess(&columns, &data_json["result"]));
+    let schema = columns_to_schema(&columns, DataType::Utf8);
+    temp_df = temp_df
+        .hstack(&array_object_to_seriess(&data_json["result"], &schema))
+        .unwrap();
 
-    let temp_df = DataFrame::new(seriess)?;
-    let temp_df = temp_df
+    temp_df = temp_df
         .lazy()
         .filter(col("项目").neq(lit("-")))
         .filter(col("项目").neq(lit("项目")))

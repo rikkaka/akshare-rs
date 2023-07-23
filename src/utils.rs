@@ -41,7 +41,15 @@ pub fn array_split_to_df<'a>(value: &'a Value, sep: char, schema: &Schema) -> Da
         .as_array()
         .unwrap()
         .par_iter()
-        .map(|x| Row::new(x.as_str().expect("Mismatched value type").split(sep).map(|x| AnyValue::Utf8(x)).collect::<Vec<AnyValue>>()))
+        .map(|x| {
+            Row::new(
+                x.as_str()
+                    .expect("Mismatched value type")
+                    .split(sep)
+                    .map(|x| AnyValue::Utf8(x))
+                    .collect::<Vec<AnyValue>>(),
+            )
+        })
         .collect::<Vec<Row>>();
     DataFrame::from_rows_and_schema(&rows, schema).unwrap()
 }
@@ -59,32 +67,48 @@ pub fn array_split_to_df<'a>(value: &'a Value, sep: char, schema: &Schema) -> Da
 //     Ok(DataFrame::from_rows_and_schema(&rows, schema)?)
 // }
 
-pub fn array_object_to_df(value: &Value, schema: &Schema) ->DataFrame {
+// 将每个array作为一行转换为DataFrame
+pub fn array_object_to_df_rows(value: &Value, schema: &Schema) -> DataFrame {
     let rows = value
         .as_array()
         .expect("Mismatched value type")
         .par_iter()
-        .map(|x| Row::new(x.as_object().unwrap()
-        .iter().map(|(_, x)| value_to_anyvalue(x)).collect::<Vec<AnyValue>>()))
-        .collect::<Vec<Row>>();
-    DataFrame::from_rows_and_schema(&rows, schema).unwrap()
-}
-
-pub fn array_object_to_seriess(names: &[&str], value: &Value) -> Vec<Series> {
-    value
-        .as_array()
-        .unwrap()
-        .iter()
-        .zip(names)
-        .map(|(x, name)| {
-            Series::new(
-                name,
+        .map(|x| {
+            Row::new(
                 x.as_object()
                     .unwrap()
                     .iter()
                     .map(|(_, x)| value_to_anyvalue(x))
                     .collect::<Vec<AnyValue>>(),
             )
+        })
+        .collect::<Vec<Row>>();
+    DataFrame::from_rows_and_schema(&rows, schema).unwrap()
+}
+
+// 将每个array作为一列转换为DataFrame
+pub fn array_object_to_df_cols(value: &Value, schema: &Schema) -> DataFrame {
+    let seriess = array_object_to_seriess(value, schema);
+    DataFrame::new(seriess).unwrap()
+}
+
+pub fn array_object_to_seriess(value: &Value, schema: &Schema) -> Vec<Series> {
+    value
+        .as_array()
+        .expect("Mismatched value type")
+        .iter()
+        .zip(schema.iter_fields())
+        .map(|(x, field)| {
+            Series::from_any_values_and_dtype(
+                &field.name,
+                &x.as_object()
+                    .unwrap()
+                    .iter()
+                    .map(|(_, x)| value_to_anyvalue(x))
+                    .collect::<Vec<AnyValue>>(),
+                &field.dtype,
+                true,
+            ).unwrap()
         })
         .collect::<Vec<Series>>()
 }
@@ -100,12 +124,24 @@ fn value_to_anyvalue(value: &Value) -> AnyValue {
                 AnyValue::Float64(x.as_f64().unwrap())
             }
         }
-        Value::String(x) => {
-            match x.as_str() {
-                "-" | "" => AnyValue::Null,
-                _ => AnyValue::Utf8(x),
-            }
+        Value::String(x) => match x.as_str() {
+            "-" | "" => AnyValue::Null,
+            _ => AnyValue::Utf8(x),
         },
         _ => panic!("not support type"),
     }
+}
+
+pub fn columns_to_schema(columns: &[&str], dtype: DataType) -> Schema {
+    let mut schema = Schema::with_capacity(columns.len());
+    for i in 0..columns.len() {
+        schema
+            .insert_at_index(i, columns[i].into(), DataType::Utf8)
+            .unwrap();
+    }
+    schema
+}
+
+fn t() {
+    Series::new("123", &[AnyValue::Utf8("123")]);
 }

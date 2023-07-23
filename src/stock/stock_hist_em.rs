@@ -57,7 +57,7 @@ pub async fn stock_zh_a_spot_em() -> Result<Option<DataFrame>> {
     }
 
     let now = Instant::now();
-    let mut temp_df = array_object_to_df(&data_json["data"]["diff"], &schema);
+    let mut temp_df = array_object_to_df_rows(&data_json["data"]["diff"], &schema);
     println!("array_object_to_df: {:?}", now.elapsed());
 
     temp_df = temp_df.select([
