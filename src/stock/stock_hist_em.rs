@@ -1,6 +1,6 @@
 use crate::imports::*;
 
-pub async fn stock_zh_a_spot_em() -> Result<Option<DataFrame>> {
+pub async fn stock_zh_a_spot_em() -> Result<DataFrame> {
     let url = "http://82.push2.eastmoney.com/api/qt/clist/get";
     let params = hashmap! {
         "pn" => "1",
@@ -17,7 +17,7 @@ pub async fn stock_zh_a_spot_em() -> Result<Option<DataFrame>> {
     };
     let data_json = request(url, params).await?;
     if data_json["data"]["diff"] == Value::Null {
-        return Ok(None);
+        return Ok(DataFrame::empty());
     };
 
     let columns = [
@@ -56,9 +56,7 @@ pub async fn stock_zh_a_spot_em() -> Result<Option<DataFrame>> {
             .set_dtype(col, DataType::Utf8);
     }
 
-    let now = Instant::now();
     let mut temp_df = array_object_to_df_rows(&data_json["data"]["diff"], &schema);
-    println!("array_object_to_df: {:?}", now.elapsed());
 
     temp_df = temp_df.select([
         "代码",
@@ -85,7 +83,7 @@ pub async fn stock_zh_a_spot_em() -> Result<Option<DataFrame>> {
         "年初至今涨跌幅",
     ])?;
 
-    Ok(Some(temp_df))
+    Ok(temp_df)
 }
 
 pub async fn stock_zh_a_hist(
@@ -94,7 +92,7 @@ pub async fn stock_zh_a_hist(
     start_date: &str,
     end_date: &str,
     adjust: &str,
-) -> Result<Option<DataFrame>> {
+) -> Result<DataFrame> {
     let code_id_map = code_id_map_em().await;
 
     let period = match period {
@@ -127,7 +125,7 @@ pub async fn stock_zh_a_hist(
 
     let data_json: Value = request(url, params).await?;
     if data_json["data"]["klines"] == Value::Null {
-        return Ok(None);
+        return Ok(DataFrame::empty());
     };
 
     let columns = [
@@ -163,8 +161,7 @@ pub async fn stock_zh_a_hist(
         new_df.with_column(temp_df.column(col)?.cast(&DataType::Float64)?)?;
     }
 
-    Ok(Some(new_df))
-    // Ok(None)
+    Ok(new_df)
 }
 
 // 60 * 60 * 24
@@ -216,7 +213,7 @@ mod tests {
     #[tokio::test]
     async fn test_stock_zh_a_spot_em() {
         let now = Instant::now();
-        let res = stock_zh_a_spot_em().await.unwrap().unwrap();
+        let res = stock_zh_a_spot_em().await.unwrap();
         assert!(!res.is_empty());
         println!("stock_zh_a_spot_em: {:?}", now.elapsed());
         println!("{:?}", res);
@@ -227,7 +224,6 @@ mod tests {
         let now = Instant::now();
         let res = stock_zh_a_hist("000001", "daily", "20210601", "20210615", "qfq")
             .await
-            .unwrap()
             .unwrap();
         assert!(!res.is_empty());
         println!("time: {:?}", now.elapsed());

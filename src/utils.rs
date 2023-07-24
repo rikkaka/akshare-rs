@@ -136,12 +136,8 @@ pub fn columns_to_schema(columns: &[&str], dtype: DataType) -> Schema {
     let mut schema = Schema::with_capacity(columns.len());
     for i in 0..columns.len() {
         schema
-            .insert_at_index(i, columns[i].into(), DataType::Utf8)
+            .insert_at_index(i, columns[i].into(), dtype.clone())
             .unwrap();
     }
     schema
-}
-
-fn t() {
-    Series::new("123", &[AnyValue::Utf8("123")]);
 }
